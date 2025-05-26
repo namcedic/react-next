@@ -1,32 +1,37 @@
-import { call, put, takeLatest } from 'redux-saga/effects'
-import axios from 'axios'
-import { LOGIN_REQUEST, loginSuccess, loginFailure } from './actions'
+import { call, put, takeLatest, all } from 'redux-saga/effects'
+import { loginFailure, loginSuccess, LOGIN_REQUEST } from './actions'
+import * as AuthService from '../../services/auth-service'
 
 interface LoginData {
-	username: string
+	email: string
 	password: string
 	remember: boolean
 }
 
-function* loginRequest(action: { type: string; payload: LoginData }) {
+interface LoginPayload {
+	data: LoginData
+	callback: (result: { success?: { accessToken: string; refreshToken: string }; error?: string }) => void
+}
+
+function* loginRequestSaga({ payload }: { payload: LoginPayload }) {
 	try {
-		const response = yield call(axios.post, '/api/login', {
-			username: action.payload.username,
-			password: action.payload.password
-		})
+		const response = yield call(AuthService.login, payload.data)
+		const { accessToken, refreshToken, user } = response.data
+		yield put(loginSuccess(user))
 
-		// If remember is true, store token in localStorage
-		if (action.payload.remember) {
-			localStorage.setItem('token', response.data.token)
+		if (payload.callback) {
+			payload.callback({ success: { accessToken, refreshToken } })
 		}
-
-		yield put(loginSuccess(response.data.user))
 	} catch (error: any) {
-		const errorMessage = error.response?.data?.message || 'Login failed'
+		const errorMessage = error.response?.data?.message || 'Login failed. Please check your credentials.'
 		yield put(loginFailure(errorMessage))
+
+		if (payload.callback) {
+			payload.callback({ error: errorMessage })
+		}
 	}
 }
 
 export default function* authSaga() {
-	yield takeLatest(LOGIN_REQUEST, loginRequest)
+	yield all([takeLatest(LOGIN_REQUEST, loginRequestSaga)])
 }

@@ -1,13 +1,14 @@
 'use client'
+
 import React from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { useDispatch, useSelector } from 'react-redux'
-import { Button, Checkbox, Form, Input } from 'antd'
+import { Button, Checkbox, Form, Input, notification } from 'antd'
 import './style.scss'
 import { loginRequest } from '@/reduxs/auth/actions'
 
 type FormData = {
-	username: string
+	email: string
 	password: string
 	remember: boolean
 }
@@ -17,19 +18,32 @@ const Login: React.FC = () => {
 	const { loading, error } = useSelector((state: any) => state.auth)
 
 	const {
-		register,
+		control,
 		handleSubmit,
 		formState: { errors }
 	} = useForm<FormData>({
 		defaultValues: {
-			username: '',
+			email: '',
 			password: '',
 			remember: true
 		}
 	})
 
 	const onSubmit = (data: FormData) => {
-		dispatch(loginRequest(data))
+		dispatch(
+			loginRequest({
+				data,
+				callback: (result: { success?: { accessToken: string; refreshToken: string }; error?: string }) => {
+					debugger
+					if (result.success && data.remember) {
+						localStorage.setItem('login-user', JSON.stringify(result.success))
+						notification.success({ message: 'Login successful!' })
+					} else if (result.error) {
+						notification.error({ message: result.error })
+					}
+				}
+			})
+		)
 	}
 
 	return (
@@ -42,12 +56,19 @@ const Login: React.FC = () => {
 					onFinish={handleSubmit(onSubmit)}
 					autoComplete='off'
 				>
-					<Form.Item
-						label='Username'
-						validateStatus={errors.username ? 'error' : ''}
-						help={errors.username?.message}
-					>
-						<Input {...register('username', { required: 'Please input your username!' })} />
+					<Form.Item label='Email' validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
+						<Controller
+							control={control}
+							name='email'
+							rules={{
+								required: 'Please input your email!',
+								pattern: {
+									value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+									message: 'Please enter a valid email!'
+								}
+							}}
+							render={({ field }) => <Input {...field} />}
+						/>
 					</Form.Item>
 
 					<Form.Item
@@ -55,15 +76,28 @@ const Login: React.FC = () => {
 						validateStatus={errors.password ? 'error' : ''}
 						help={errors.password?.message}
 					>
-						<Input.Password {...register('password', { required: 'Please input your password!' })} />
-					</Form.Item>
-
-					<Form.Item name='remember' valuePropName='checked' wrapperCol={{ offset: 8, span: 16 }}>
-						<Checkbox {...register('remember')}>Remember me</Checkbox>
+						<Controller
+							control={control}
+							name='password'
+							rules={{ required: 'Please input your password!' }}
+							render={({ field }) => <Input.Password {...field} />}
+						/>
 					</Form.Item>
 
 					<Form.Item wrapperCol={{ offset: 8, span: 16 }}>
-						<Button type='primary' htmlType='submit' loading={loading}>
+						<Controller
+							control={control}
+							name='remember'
+							render={({ field }) => (
+								<Checkbox {...field} checked={field.value}>
+									Remember me
+								</Checkbox>
+							)}
+						/>
+					</Form.Item>
+
+					<Form.Item wrapperCol={{ offset: 8, span: 16 }}>
+						<Button type='primary' htmlType='submit' loading={loading} disabled={loading}>
 							Submit
 						</Button>
 					</Form.Item>
